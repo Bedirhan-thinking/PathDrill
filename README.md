@@ -42,7 +42,7 @@ Under the hood, it uses `os.scandir` for high-performance traversal, making it c
 
 ## 📸 Screenshot
 
-![PathDrill Screenshot](assets/screenshot.jpg)
+![PathDrill Screenshot](assets/screenshot1.jpg)
 
 ![PathDrill Gif](assets/x.gif)
 
