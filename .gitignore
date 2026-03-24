@@ -1,0 +1,16 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller build files
+build/
+dist/
+*.spec
+
+# User outputs
+*.json
+
+# IDE folders
+.vscode/
+.idea/
