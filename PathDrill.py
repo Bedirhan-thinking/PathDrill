@@ -47,9 +47,9 @@ class ScanEngine(QThread):
         name = os.path.basename(current_path)
         node = {"name": name if name else current_path}
         
-        # Absolute path ekleme ve JSON uyumluluğu için ters eğik çizgileri düzeltme
+        # Normalize while preserving the operating system's native path separator (OS separator).
         if self.options.get("include_path", True):
-            node["full_path"] = current_path.replace('\\', '/')
+            node["full_path"] = os.path.normpath(current_path)
         
         try:
             # os.stat is called once to gather all metadata
@@ -233,7 +233,7 @@ class PathDrillApp(QMainWindow):
         lbl_depth.setToolTip("-1 Unlimited, 0 Root folders only.")
         self.spin_depth = QSpinBox()
         self.spin_depth.setRange(-1, 100)
-        self.spin_depth.setValue(2) # Default depth 2
+        self.spin_depth.setValue(-1) # Default depth -1 (unlimited)
         depth_layout.addWidget(lbl_depth)
         depth_layout.addWidget(self.spin_depth)
         scan_layout.addLayout(depth_layout)

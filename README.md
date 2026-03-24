@@ -42,11 +42,10 @@ Under the hood, it uses `os.scandir` for high-performance traversal, making it c
 ## 🧪 Example Output
 
 ```json
-
 {
     "report_info": {
-        "tool": "PathDrill Extractor",
-        "creation_datetime": "2026-03-24T22:09:25.631101",
+        "tool": "PathDrill-Extractor",
+        "creation_datetime": "2026-03-24T22:54:04.782642",
         "scanned_paths_count": 1,
         "defined_depth": "Unlimited",
         "metadata_filtering": {
