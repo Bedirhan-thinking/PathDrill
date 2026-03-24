@@ -14,7 +14,7 @@ from PySide6.QtCore import Qt, QDir, QThread, Signal, QItemSelectionModel
 from PySide6.QtGui import QIcon, QPixmap
 
 # Increase recursion depth for deeply nested directory structures
-sys.setrecursionlimit(1000000) # Increased further for edge cases
+sys.setrecursionlimit(1000000)
 
 PATHDRILL_LOGO_DATA = """
 """
@@ -30,8 +30,9 @@ def format_size(size_bytes):
     return f"{size_bytes:.2f} {units[i]}"
 
 class ScanEngine(QThread):
-    # Modified to not need percentage if indeterminate
-    heartbeat_signal = Signal(str) 
+    progress_signal = Signal(int)       # 0 to 100 percentage
+    phase_signal = Signal(str)          # To update UI regarding Phase 1 vs Phase 2
+    heartbeat_signal = Signal(str)      # Sub-status updates
     log_signal = Signal(str)
     finished_signal = Signal(dict)
 
@@ -43,25 +44,60 @@ class ScanEngine(QThread):
         self.options = options
         self._is_cancelled = False
         
-        # Performance Tracking Counters
+        # Architecture Counters
+        self.total_expected_nodes = 0
         self.total_nodes_scanned = 0
         self.unreadable_nodes = 0
 
     def cancel(self):
         """Safely signals the thread to terminate its operations."""
         self._is_cancelled = True
-        self.log_signal.emit("\n[!] ABORT SIGNAL RECEIVED. Safely unwinding recursive stack...")
+        self.log_signal.emit("\n[!] ABORT SIGNAL RECEIVED. Commencing graceful shutdown...")
+
+    def _fast_count_nodes(self, current_path, current_depth):
+        """
+        Phase 1 Algorithm: Lightning fast topological counting without metadata extraction.
+        Respects the exact depth limitations of the main algorithm.
+        """
+        if self._is_cancelled: return 0
+        
+        count = 1 # Count the current directory/file itself
+        
+        # Periodic heartbeat for massive Phase 1 scans
+        if count % 50000 == 0:
+            self.heartbeat_signal.emit(f"Phase 1: Indexing topology... (Discovered so far: {self.total_expected_nodes + count:,})")
+
+        if os.path.isdir(current_path):
+            if self.max_depth != -1 and current_depth >= self.max_depth:
+                return count # Hit depth wall, return count as is
+
+            try:
+                # os.scandir is an iterator yielding DirEntry objects. Much faster than os.listdir.
+                with os.scandir(current_path) as scanner:
+                    for item in scanner:
+                        count += self._fast_count_nodes(item.path, current_depth + 1)
+            except (PermissionError, OSError):
+                pass # Unreadable nodes are handled in Phase 2 for error logging
+                
+        return count
 
     def build_tree(self, current_path, current_depth):
-        """Recursively builds a tree dictionary for the given path using DFS."""
+        """
+        Phase 2 Algorithm: Full Metadata Extraction (Deep Scanning).
+        """
         if self._is_cancelled:
             return {"name": os.path.basename(current_path) or current_path, "error": "Aborted"}
 
         self.total_nodes_scanned += 1
         
-        # Emitting Heartbeat every 15,000 items to prevent UI freeze and give feedback
-        if self.total_nodes_scanned % 15000 == 0:
-            self.heartbeat_signal.emit(f"Deep Scanning... {self.total_nodes_scanned:,} nodes processed.")
+        # Calculate Deterministic Percentage
+        if self.total_expected_nodes > 0:
+            percentage = int((self.total_nodes_scanned / self.total_expected_nodes) * 100)
+            
+            # Emit progress sparingly to not throttle the UI thread (every 1000 items or 1%)
+            if self.total_nodes_scanned % 1000 == 0:
+                self.progress_signal.emit(percentage)
+                self.heartbeat_signal.emit(f"Phase 2: Extracting... {percentage}% ({self.total_nodes_scanned:,} / {self.total_expected_nodes:,})")
 
         name = os.path.basename(current_path)
         node = {"name": name if name else current_path}
@@ -70,6 +106,7 @@ class ScanEngine(QThread):
             node["full_path"] = os.path.normpath(current_path)
         
         try:
+            # This is the heavy I/O part. Benefiting heavily from Phase 1 OS Cache.
             stats = os.stat(current_path)
             if self.options.get("include_date", True):
                 node["last_modified"] = datetime.fromtimestamp(stats.st_mtime).isoformat()
@@ -106,7 +143,6 @@ class ScanEngine(QThread):
     # --- EXPORT STRATEGIES ---
     def export_to_json(self, data, file_path):
         minify = self.options.get("minify_output", False)
-        # Indent None saves massive disk space by removing spaces/newlines (Shannon Entropy Optimization)
         indent_level = None if minify else 4 
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=indent_level, ensure_ascii=False)
@@ -169,8 +205,31 @@ class ScanEngine(QThread):
         hierarchy_list = []
         
         self.log_signal.emit(f"### PathDrill OFFICIAL Scan Started: {start_time.strftime('%H:%M:%S')} ###")
-        self.log_signal.emit("Initializing Depth-First Search (DFS) engine...")
         
+        # ==========================================
+        # PHASE 1: PRE-FLIGHT TOPOLOGY INDEXING
+        # ==========================================
+        self.phase_signal.emit("INDETERMINATE") # Tell UI to show spinner
+        self.log_signal.emit("Phase 1: Initiating High-Speed Topological Indexing...")
+        
+        for path in self.target_paths:
+            if self._is_cancelled: break
+            if not os.path.exists(path): continue
+            
+            self.total_expected_nodes += self._fast_count_nodes(path, 0)
+            
+        if self._is_cancelled:
+            self.wrap_up_and_exit(start_time, [])
+            return
+
+        self.log_signal.emit(f"Phase 1 Complete. Target structural size: {self.total_expected_nodes:,} nodes.")
+        
+        # ==========================================
+        # PHASE 2: METADATA EXTRACTION (DFS)
+        # ==========================================
+        self.phase_signal.emit("DETERMINATE") # Tell UI to activate 0-100 progress bar
+        self.log_signal.emit("Phase 2: Extracting deep metadata structures...")
+
         for path in self.target_paths:
             if self._is_cancelled: break
             if not os.path.exists(path): continue
@@ -178,6 +237,10 @@ class ScanEngine(QThread):
             self.log_signal.emit(f"Anchoring at root: {path}")
             hierarchy_list.append(self.build_tree(path, 0))
 
+        self.wrap_up_and_exit(start_time, hierarchy_list)
+
+    def wrap_up_and_exit(self, start_time, hierarchy_list):
+        """Helper function to compile and export data at the end of the thread."""
         status_message = "Aborted by User" if self._is_cancelled else "Completed Successfully"
 
         final_data = {
@@ -217,6 +280,7 @@ class ScanEngine(QThread):
                 self.log_signal.emit(f"Total Nodes: {self.total_nodes_scanned:,} | Errors/Locks: {self.unreadable_nodes:,}")
                 self.log_signal.emit(f"Official report saved: {self.save_path}")
                 
+            self.progress_signal.emit(100) # Ensure bar is maxed out
             self.finished_signal.emit(final_data)
             
         except Exception as e:
@@ -300,7 +364,6 @@ class PathDrillApp(QMainWindow):
         self.grp_options = QGroupBox("Metadata Extraction Parameters")
         options_layout = QVBoxLayout(self.grp_options)
         
-        # Grouped checkboxes horizontally for better space management
         h_box_1 = QHBoxLayout()
         self.chk_include_path = QCheckBox("Absolute Path")
         self.chk_include_path.setChecked(True)
@@ -347,7 +410,7 @@ class PathDrillApp(QMainWindow):
         lbl_depth.setToolTip("-1 Unlimited, 0 Root folders only.")
         self.spin_depth = QSpinBox()
         self.spin_depth.setRange(-1, 100)
-        self.spin_depth.setValue(-1) # Set default to -1 since we are doing deep scans
+        self.spin_depth.setValue(-1)
         depth_layout.addWidget(lbl_depth)
         depth_layout.addWidget(self.spin_depth)
         scan_layout.addLayout(depth_layout)
@@ -363,7 +426,6 @@ class PathDrillApp(QMainWindow):
         
         controls_layout.addWidget(scan_grp)
 
-        # Dynamic Action Button
         self.btn_analyze = QPushButton("Drill Down (Start Scan Engine)")
         self.btn_analyze.setIcon(self.logo_icon)
         self.btn_analyze.setMinimumHeight(50)
@@ -371,7 +433,6 @@ class PathDrillApp(QMainWindow):
         self.btn_analyze.setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; }")
         controls_layout.addWidget(self.btn_analyze)
 
-        # Live Heartbeat Label
         self.lbl_heartbeat = QLabel("Status: Idle")
         self.lbl_heartbeat.setStyleSheet("color: #aaaaaa; font-style: italic;")
         self.lbl_heartbeat.setAlignment(Qt.AlignCenter)
@@ -394,10 +455,8 @@ class PathDrillApp(QMainWindow):
         """)
         controls_layout.addWidget(self.txt_log)
 
-        # The progress bar - will be set to indeterminate mode during scan
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        self.progress_bar.setTextVisible(False) # Hide the % text for indeterminate mode
         controls_layout.addWidget(self.progress_bar)
 
         splitter.addWidget(controls_panel)
@@ -409,7 +468,6 @@ class PathDrillApp(QMainWindow):
         ext = text.lower()
         self.txt_output_name.setPlainText(f"{base_name}.{ext}")
         
-        # Auto-check minify for JSON/CSV if they are doing big scans, uncheck for TXT/MD where format matters
         if ext in ["json", "csv"]:
             self.chk_minify.setEnabled(True)
         else:
@@ -480,6 +538,16 @@ class PathDrillApp(QMainWindow):
     def update_heartbeat(self, msg):
         self.lbl_heartbeat.setText(f"Status: {msg}")
 
+    def update_phase(self, phase_type):
+        """Switches the UI progress bar between indeterminate and determinate modes."""
+        if phase_type == "INDETERMINATE":
+            self.progress_bar.setRange(0, 0)
+            self.progress_bar.setTextVisible(False)
+        elif phase_type == "DETERMINATE":
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(0)
+            self.progress_bar.setTextVisible(True)
+
     def start_analysis(self):
         selected_paths = self.get_selected_paths()
         if not selected_paths:
@@ -505,17 +573,20 @@ class PathDrillApp(QMainWindow):
         self.txt_output_name.setEnabled(False)
         self.txt_log.clear()
         
-        # Enable indeterminate progress mode (Marquee/Spinner)
-        self.progress_bar.setRange(0, 0)
         self.progress_bar.setVisible(True)
         self.lbl_heartbeat.setText("Status: Engine Started...")
 
         filtering_options = self.get_parametric_options()
 
         self.worker = ScanEngine(selected_paths, depth, save_path, filtering_options)
-        self.worker.heartbeat_signal.connect(self.update_heartbeat) # Connect heartbeat
+        
+        # Connect the new signal slots
+        self.worker.phase_signal.connect(self.update_phase)
+        self.worker.progress_signal.connect(self.progress_bar.setValue)
+        self.worker.heartbeat_signal.connect(self.update_heartbeat) 
         self.worker.log_signal.connect(self.txt_log.append)
         self.worker.finished_signal.connect(self.analysis_finished)
+        
         self.worker.start()
 
     def analysis_finished(self, data):
@@ -528,11 +599,7 @@ class PathDrillApp(QMainWindow):
         self.spin_depth.setEnabled(True)
         self.txt_output_name.setEnabled(True)
         
-        # Stop indeterminate mode
-        self.progress_bar.setRange(0, 100) 
-        self.progress_bar.setValue(100)
         self.progress_bar.setVisible(False)
-        
         self.lbl_heartbeat.setText("Status: Idle")
         
         if hasattr(self.worker, '_is_cancelled') and self.worker._is_cancelled:
