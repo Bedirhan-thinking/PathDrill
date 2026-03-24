@@ -14,11 +14,8 @@ from PySide6.QtCore import Qt, QDir, QThread, Signal, QItemSelectionModel
 from PySide6.QtGui import QIcon, QPixmap
 
 # Increase recursion depth for deeply nested directory structures
-sys.setrecursionlimit(100000)
+sys.setrecursionlimit(1000000) # Increased further for edge cases
 
-# --------------------------------------------------------------------------
-# PathDrill OFFICIAL LOGO (Scalable Icon Data - Base64)
-# --------------------------------------------------------------------------
 PATHDRILL_LOGO_DATA = """
 """
 
@@ -33,7 +30,8 @@ def format_size(size_bytes):
     return f"{size_bytes:.2f} {units[i]}"
 
 class ScanEngine(QThread):
-    progress_signal = Signal(int)
+    # Modified to not need percentage if indeterminate
+    heartbeat_signal = Signal(str) 
     log_signal = Signal(str)
     finished_signal = Signal(dict)
 
@@ -42,22 +40,37 @@ class ScanEngine(QThread):
         self.target_paths = target_paths
         self.max_depth = max_depth
         self.save_path = save_path
-        self.options = options # Dictionary containing metadata options and export format
+        self.options = options
+        self._is_cancelled = False
+        
+        # Performance Tracking Counters
+        self.total_nodes_scanned = 0
+        self.unreadable_nodes = 0
+
+    def cancel(self):
+        """Safely signals the thread to terminate its operations."""
+        self._is_cancelled = True
+        self.log_signal.emit("\n[!] ABORT SIGNAL RECEIVED. Safely unwinding recursive stack...")
 
     def build_tree(self, current_path, current_depth):
         """Recursively builds a tree dictionary for the given path using DFS."""
+        if self._is_cancelled:
+            return {"name": os.path.basename(current_path) or current_path, "error": "Aborted"}
+
+        self.total_nodes_scanned += 1
+        
+        # Emitting Heartbeat every 15,000 items to prevent UI freeze and give feedback
+        if self.total_nodes_scanned % 15000 == 0:
+            self.heartbeat_signal.emit(f"Deep Scanning... {self.total_nodes_scanned:,} nodes processed.")
+
         name = os.path.basename(current_path)
         node = {"name": name if name else current_path}
         
-        # FIXED: Use os.path.normpath to respect OS-specific separators instead of forcing '/'
         if self.options.get("include_path", True):
             node["full_path"] = os.path.normpath(current_path)
         
         try:
-            # os.stat is called once to gather all metadata to minimize I/O overhead
             stats = os.stat(current_path)
-            
-            # Parametric Filtering - Only add metadata if selected in UI
             if self.options.get("include_date", True):
                 node["last_modified"] = datetime.fromtimestamp(stats.st_mtime).isoformat()
             if self.options.get("include_bytes", True):
@@ -65,22 +78,23 @@ class ScanEngine(QThread):
             if self.options.get("include_readable", True):
                 node["size_readable"] = format_size(stats.st_size)
         except OSError:
-            node["error"] = "Metadata unreadable"
+            self.unreadable_nodes += 1
+            node["error"] = "Metadata unreadable (Permission/Lock)"
             return node
 
         if os.path.isdir(current_path):
             node["type"] = "directory"
-            
             if self.max_depth != -1 and current_depth >= self.max_depth:
                 return node
 
             node["contents"] = []
             try:
-                # High-performance directory traversal using os.scandir
                 with os.scandir(current_path) as scanner:
                     for item in scanner:
+                        if self._is_cancelled: break
                         node["contents"].append(self.build_tree(item.path, current_depth + 1))
             except PermissionError:
+                self.unreadable_nodes += 1
                 node["error"] = "Access Denied"
         else:
             node["type"] = "file"
@@ -90,16 +104,15 @@ class ScanEngine(QThread):
         return node
 
     # --- EXPORT STRATEGIES ---
-
     def export_to_json(self, data, file_path):
-        """Dumps the hierarchical tree to a JSON file."""
+        minify = self.options.get("minify_output", False)
+        # Indent None saves massive disk space by removing spaces/newlines (Shannon Entropy Optimization)
+        indent_level = None if minify else 4 
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
+            json.dump(data, f, indent=indent_level, ensure_ascii=False)
 
     def export_to_csv(self, data, file_path):
-        """Flattens the hierarchical tree to a 2D matrix and exports as CSV."""
         rows = []
-        
         def flatten(nodes):
             for node in nodes:
                 row = {
@@ -113,12 +126,9 @@ class ScanEngine(QThread):
                     "Error": node.get("error", "")
                 }
                 rows.append(row)
-                if "contents" in node:
-                    flatten(node["contents"])
+                if "contents" in node: flatten(node["contents"])
         
         flatten(data["scan_results"])
-        
-        # utf-8-sig is used so Excel recognizes the UTF-8 encoding properly
         with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
             fieldnames = ["Name", "Type", "Full Path", "Size (Bytes)", "Size (Readable)", "Last Modified", "Extension", "Error"]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -126,30 +136,24 @@ class ScanEngine(QThread):
             writer.writerows(rows)
 
     def export_to_txt(self, data, file_path):
-        """Generates a visual ASCII-like tree representation."""
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(f"PathDrill Report - Generated at {data['report_info']['creation_datetime']}\n")
             f.write("=" * 60 + "\n\n")
-
             def write_tree(nodes, prefix=""):
                 for i, node in enumerate(nodes):
                     is_last = (i == len(nodes) - 1)
                     connector = "└── " if is_last else "├── "
                     size_info = f" ({node.get('size_readable', '')})" if 'size_readable' in node else ""
                     f.write(f"{prefix}{connector}{node.get('name', '')}{size_info}\n")
-                    
                     if "contents" in node:
                         extension = "    " if is_last else "│   "
                         write_tree(node["contents"], prefix + extension)
-
             write_tree(data["scan_results"])
 
     def export_to_md(self, data, file_path):
-        """Generates a Markdown file with bulleted lists and folder/file icons."""
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(f"# PathDrill Extraction Report\n")
             f.write(f"**Generated:** `{data['report_info']['creation_datetime']}`\n\n")
-
             def write_md(nodes, depth=0):
                 indent = "  " * depth
                 for node in nodes:
@@ -157,43 +161,43 @@ class ScanEngine(QThread):
                     name = f"**{node.get('name', '')}**" if node.get("type") == "directory" else node.get('name', '')
                     size_info = f" *({node.get('size_readable', '')})*" if 'size_readable' in node else ""
                     f.write(f"{indent}- {icon} {name}{size_info}\n")
-                    
-                    if "contents" in node:
-                        write_md(node["contents"], depth + 1)
-
+                    if "contents" in node: write_md(node["contents"], depth + 1)
             write_md(data["scan_results"])
 
     def run(self):
-        """Main execution loop for the thread."""
         start_time = datetime.now()
         hierarchy_list = []
-        total = len(self.target_paths)
         
         self.log_signal.emit(f"### PathDrill OFFICIAL Scan Started: {start_time.strftime('%H:%M:%S')} ###")
-        self.log_signal.emit(f"Targeting {total} root paths with parametric filtering.")
+        self.log_signal.emit("Initializing Depth-First Search (DFS) engine...")
         
-        for i, path in enumerate(self.target_paths):
+        for path in self.target_paths:
+            if self._is_cancelled: break
             if not os.path.exists(path): continue
-            self.log_signal.emit(f"Scanning ({i+1}/{total}): {path}")
+            
+            self.log_signal.emit(f"Anchoring at root: {path}")
             hierarchy_list.append(self.build_tree(path, 0))
-            self.progress_signal.emit(int(((i + 1) / total) * 100))
+
+        status_message = "Aborted by User" if self._is_cancelled else "Completed Successfully"
 
         final_data = {
             "report_info": {
                 "tool": "PathDrill-Extractor",
                 "creation_datetime": start_time.isoformat(),
                 "scanned_paths_count": len(self.target_paths),
+                "total_nodes_extracted": self.total_nodes_scanned,
+                "unreadable_nodes_count": self.unreadable_nodes,
                 "defined_depth": self.max_depth if self.max_depth != -1 else "Unlimited",
                 "metadata_filtering": self.options,
-                "status": "Completed Successfully"
+                "status": status_message
             },
             "scan_results": hierarchy_list
         }
 
-        # Strategy Pattern Selection based on UI choice
         export_format = self.options.get("export_format", "JSON")
         
         try:
+            self.log_signal.emit(f"Aggregating data... Formatting as {export_format}.")
             if export_format == "JSON":
                 self.export_to_json(final_data, self.save_path)
             elif export_format == "CSV":
@@ -204,8 +208,15 @@ class ScanEngine(QThread):
                 self.export_to_md(final_data, self.save_path)
             
             elapsed_time = datetime.now() - start_time
-            self.log_signal.emit(f"### Completed in {elapsed_time.total_seconds():.3f} seconds. ###")
-            self.log_signal.emit(f"Official report saved: {self.save_path}")
+            
+            if self._is_cancelled:
+                self.log_signal.emit(f"### OPERATION ABORTED after {elapsed_time.total_seconds():.3f} seconds. ###")
+                self.log_signal.emit(f"Partial report saved safely: {self.save_path}")
+            else:
+                self.log_signal.emit(f"### Completed in {elapsed_time.total_seconds():.3f} seconds. ###")
+                self.log_signal.emit(f"Total Nodes: {self.total_nodes_scanned:,} | Errors/Locks: {self.unreadable_nodes:,}")
+                self.log_signal.emit(f"Official report saved: {self.save_path}")
+                
             self.finished_signal.emit(final_data)
             
         except Exception as e:
@@ -217,9 +228,8 @@ class PathDrillApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PathDrill - Advanced Path Extraction & Ad-hoc Analysis Tool")
-        self.resize(1100, 750)
+        self.resize(1150, 780)
 
-        # Set official logo (embedded base64)
         qpixmap = QPixmap()
         if PATHDRILL_LOGO_DATA.strip():
             qpixmap.loadFromData(base64.b64decode(PATHDRILL_LOGO_DATA))
@@ -237,7 +247,6 @@ class PathDrillApp(QMainWindow):
         file_manager_widget = QWidget()
         file_layout = QVBoxLayout(file_manager_widget)
         
-        # 1. Official Logo & Quick Search Bar
         nav_layout = QHBoxLayout()
         logo_label = QLabel()
         if not qpixmap.isNull():
@@ -246,9 +255,8 @@ class PathDrillApp(QMainWindow):
 
         self.txt_search_path = QLineEdit()
         self.txt_search_path.setPlaceholderText("Paste full path or start typing...")
-        self.txt_search_path.setToolTip("Paste full path and press Enter to jump.")
-        self.txt_search_path.returnPressed.connect(self.go_to_path) # Jump to path on Enter
-        self.txt_search_path.textChanged.connect(self.search_directories) # Quick name search
+        self.txt_search_path.returnPressed.connect(self.go_to_path)
+        self.txt_search_path.textChanged.connect(self.search_directories)
         nav_layout.addWidget(self.txt_search_path)
         
         self.btn_search = QPushButton("Find")
@@ -257,9 +265,8 @@ class PathDrillApp(QMainWindow):
         
         file_layout.addLayout(nav_layout)
 
-        # 2. Explorer Tree
         self.model = QFileSystemModel()
-        self.model.setRootPath("") # All drives
+        self.model.setRootPath("") 
         self.model.setFilter(QDir.AllDirs | QDir.Files | QDir.NoDotAndDotDot | QDir.Hidden)
         
         self.tree = QTreeView()
@@ -269,7 +276,7 @@ class PathDrillApp(QMainWindow):
         self.tree.setSortingEnabled(True)
         self.tree.setSelectionMode(QTreeView.ExtendedSelection)
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.tree.doubleClicked.connect(self.on_item_double_clicked) # Navigation
+        self.tree.doubleClicked.connect(self.on_item_double_clicked)
         
         initial_index = self.model.index(os.getcwd())
         self.tree.scrollTo(initial_index)
@@ -278,49 +285,54 @@ class PathDrillApp(QMainWindow):
         file_layout.addWidget(self.tree)
         splitter.addWidget(file_manager_widget)
 
-        # --- RIGHT SIDE: Controls, Parametric Options & Logs ---
+        # --- RIGHT SIDE: Controls & Logs ---
         controls_panel = QWidget()
         controls_layout = QVBoxLayout(controls_panel)
         controls_layout.setContentsMargins(10, 0, 0, 0)
         
-        # 1. Official Logo Banner
         banner_label = QLabel()
         if not qpixmap.isNull():
             banner_label.setPixmap(qpixmap.scaled(200, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         banner_label.setAlignment(Qt.AlignCenter)
         controls_layout.addWidget(banner_label)
         
-        # 2. Parametric Extraction Options (Metadata Filter)
+        # Options Group
         self.grp_options = QGroupBox("Metadata Extraction Parameters")
         options_layout = QVBoxLayout(self.grp_options)
         
-        self.chk_include_path = QCheckBox("Include Full Absolute Path")
+        # Grouped checkboxes horizontally for better space management
+        h_box_1 = QHBoxLayout()
+        self.chk_include_path = QCheckBox("Absolute Path")
         self.chk_include_path.setChecked(True)
-        options_layout.addWidget(self.chk_include_path)
-        
-        self.chk_include_date = QCheckBox("Include Last Modification Date/Time")
+        self.chk_include_date = QCheckBox("Modified Date")
         self.chk_include_date.setChecked(True)
-        options_layout.addWidget(self.chk_include_date)
-        
-        self.chk_include_bytes = QCheckBox("Include Raw Size (Bytes)")
+        h_box_1.addWidget(self.chk_include_path)
+        h_box_1.addWidget(self.chk_include_date)
+        options_layout.addLayout(h_box_1)
+
+        h_box_2 = QHBoxLayout()
+        self.chk_include_bytes = QCheckBox("Raw Size (B)")
         self.chk_include_bytes.setChecked(True)
-        options_layout.addWidget(self.chk_include_bytes)
-        
-        self.chk_include_readable = QCheckBox("Include Readable Size (KB/MB)")
+        self.chk_include_readable = QCheckBox("Readable Size")
         self.chk_include_readable.setChecked(True)
-        options_layout.addWidget(self.chk_include_readable)
+        h_box_2.addWidget(self.chk_include_bytes)
+        h_box_2.addWidget(self.chk_include_readable)
+        options_layout.addLayout(h_box_2)
         
-        self.chk_include_extension = QCheckBox("Include File Extension")
+        h_box_3 = QHBoxLayout()
+        self.chk_include_extension = QCheckBox("File Extension")
         self.chk_include_extension.setChecked(True)
-        options_layout.addWidget(self.chk_include_extension)
-        
+        self.chk_minify = QCheckBox("Minify Output (Reduce File Size)")
+        self.chk_minify.setToolTip("Removes formatting spaces. Crucial for massive entire-drive scans.")
+        h_box_3.addWidget(self.chk_include_extension)
+        h_box_3.addWidget(self.chk_minify)
+        options_layout.addLayout(h_box_3)
+
         controls_layout.addWidget(self.grp_options)
 
-        # 3. Basic Scan Controls (Depth & Output Name)
         scan_grp = QGroupBox("Core Scan Controls")
         scan_layout = QVBoxLayout(scan_grp)
         
-        # Combo box for Format selection
         format_layout = QHBoxLayout()
         lbl_format = QLabel("Export Format:")
         self.cmb_format = QComboBox()
@@ -335,7 +347,7 @@ class PathDrillApp(QMainWindow):
         lbl_depth.setToolTip("-1 Unlimited, 0 Root folders only.")
         self.spin_depth = QSpinBox()
         self.spin_depth.setRange(-1, 100)
-        self.spin_depth.setValue(2) # Default depth 2
+        self.spin_depth.setValue(-1) # Set default to -1 since we are doing deep scans
         depth_layout.addWidget(lbl_depth)
         depth_layout.addWidget(self.spin_depth)
         scan_layout.addLayout(depth_layout)
@@ -351,102 +363,101 @@ class PathDrillApp(QMainWindow):
         
         controls_layout.addWidget(scan_grp)
 
-        # 4. Action Buttons
+        # Dynamic Action Button
         self.btn_analyze = QPushButton("Drill Down (Start Scan Engine)")
         self.btn_analyze.setIcon(self.logo_icon)
         self.btn_analyze.setMinimumHeight(50)
-        self.btn_analyze.clicked.connect(self.start_analysis)
+        self.btn_analyze.clicked.connect(self.toggle_analysis)
+        self.btn_analyze.setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; }")
         controls_layout.addWidget(self.btn_analyze)
+
+        # Live Heartbeat Label
+        self.lbl_heartbeat = QLabel("Status: Idle")
+        self.lbl_heartbeat.setStyleSheet("color: #aaaaaa; font-style: italic;")
+        self.lbl_heartbeat.setAlignment(Qt.AlignCenter)
+        controls_layout.addWidget(self.lbl_heartbeat)
 
         self.btn_open_folder = QPushButton("Open Official Output Directory")
         self.btn_open_folder.clicked.connect(self.open_output_folder)
         controls_layout.addWidget(self.btn_open_folder)
 
-        # 5. Hacker-Aesthetic Logs & Progress
         controls_layout.addWidget(QLabel("Operation Logs & Performance Monitoring:"))
         self.txt_log = QTextEdit()
         self.txt_log.setReadOnly(True)
-        
         self.txt_log.setStyleSheet("""
             background-color: #1e1e1e; 
             color: #00ff00; 
             font-family: Consolas, Courier New, monospace; 
-            font-size: 13px;
+            font-size: 12px;
             border-radius: 5px;
             padding: 5px;
         """)
         controls_layout.addWidget(self.txt_log)
 
+        # The progress bar - will be set to indeterminate mode during scan
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
+        self.progress_bar.setTextVisible(False) # Hide the % text for indeterminate mode
         controls_layout.addWidget(self.progress_bar)
 
         splitter.addWidget(controls_panel)
-        splitter.setSizes([600, 400]) # Initial split ratio
+        splitter.setSizes([600, 450])
 
-    # --- Directory Manager: Navigation & Quick Acess ---
     def update_output_extension(self, text):
-        """Automatically updates the file extension in the text box when format changes."""
         current_name = self.txt_output_name.toPlainText().strip()
         base_name = os.path.splitext(current_name)[0]
         ext = text.lower()
         self.txt_output_name.setPlainText(f"{base_name}.{ext}")
+        
+        # Auto-check minify for JSON/CSV if they are doing big scans, uncheck for TXT/MD where format matters
+        if ext in ["json", "csv"]:
+            self.chk_minify.setEnabled(True)
+        else:
+            self.chk_minify.setChecked(False)
+            self.chk_minify.setEnabled(False)
 
     def go_to_path(self):
-        """Official Navigation Method. Jumps to path pasted in search bar."""
         path = self.txt_search_path.text().strip()
         if not os.path.exists(path):
             QMessageBox.warning(self, "Invalid Path", f"The path unreadable or does not exist:\n{path}")
             return
-        
         idx = self.model.index(path)
         if idx.isValid():
             self.tree.scrollTo(idx)
             self.tree.selectionModel().select(idx, QItemSelectionModel.Select | QItemSelectionModel.Rows)
-            # Expand to show the path contents
             self.tree.expand(idx)
 
     def search_directories(self):
-        """Quick Access Method. Collapses/Expands tree to find by name."""
         search_term = self.txt_search_path.text().strip().lower()
-        
-        # Simplified quick search
-        if not search_term:
-            return
-            
+        if not search_term: return
         selected_paths = self.get_selected_paths()
         if selected_paths:
             root_idx = self.model.index(selected_paths[0])
             self.collapse_recursive(root_idx, search_term)
 
     def collapse_recursive(self, index, term):
-        """Helper to recursively expand directories matching search term."""
         if not index.isValid(): return
-        
         name = self.model.fileName(index).lower()
         if term in name:
             self.tree.expand(index)
 
     def on_item_double_clicked(self, index):
-        """Explorer Shortcut: Double click moves directory view."""
         if self.model.isDir(index):
             path = self.model.filePath(index)
             self.tree.scrollTo(self.model.index(path))
 
-    # --- Core Scan Engine & Analysis ---
     def get_parametric_options(self):
-        """Collects metadata filter state and export format from UI."""
         return {
             "include_path": self.chk_include_path.isChecked(),
             "include_date": self.chk_include_date.isChecked(),
             "include_bytes": self.chk_include_bytes.isChecked(),
             "include_readable": self.chk_include_readable.isChecked(),
             "include_extension": self.chk_include_extension.isChecked(),
-            "export_format": self.cmb_format.currentText()
+            "export_format": self.cmb_format.currentText(),
+            "minify_output": self.chk_minify.isChecked()
         }
 
     def get_selected_paths(self):
-        """Officially selects paths for high-performance drilling."""
         indexes = self.tree.selectionModel().selectedIndexes()
         selected_paths = []
         for index in indexes:
@@ -456,8 +467,20 @@ class PathDrillApp(QMainWindow):
                     selected_paths.append(path)
         return selected_paths
 
+    def toggle_analysis(self):
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            self.worker.cancel()
+            self.btn_analyze.setEnabled(False)
+            self.btn_analyze.setText("Aborting... (Safely unwinding stack)")
+            self.btn_analyze.setStyleSheet("background-color: #8B0000; color: white;")
+            self.lbl_heartbeat.setText("Status: Halting operations...")
+        else:
+            self.start_analysis()
+
+    def update_heartbeat(self, msg):
+        self.lbl_heartbeat.setText(f"Status: {msg}")
+
     def start_analysis(self):
-        """Officially launches the high-performance Drilling Engine."""
         selected_paths = self.get_selected_paths()
         if not selected_paths:
             QMessageBox.warning(self, "Extraction Error", "Please use the official navigator to select at least one directory for analysis.")
@@ -466,7 +489,6 @@ class PathDrillApp(QMainWindow):
         depth = self.spin_depth.value()
         output_file_name = self.txt_output_name.toPlainText().strip()
         
-        # Ensure correct extension is enforced
         expected_ext = f".{self.cmb_format.currentText().lower()}"
         if not output_file_name.lower().endswith(expected_ext):
             output_file_name += expected_ext
@@ -474,38 +496,53 @@ class PathDrillApp(QMainWindow):
 
         save_path = os.path.join(os.getcwd(), output_file_name)
 
-        # Freeze UI during the "drill"
-        self.btn_analyze.setEnabled(False)
+        self.btn_analyze.setText("ABORT DRILL (Cancel Scan)")
+        self.btn_analyze.setStyleSheet("background-color: #d9534f; color: white; font-weight: bold;") 
+        
         self.grp_options.setEnabled(False)
         self.cmb_format.setEnabled(False)
         self.spin_depth.setEnabled(False)
         self.txt_output_name.setEnabled(False)
         self.txt_log.clear()
-        self.progress_bar.setValue(0)
+        
+        # Enable indeterminate progress mode (Marquee/Spinner)
+        self.progress_bar.setRange(0, 0)
         self.progress_bar.setVisible(True)
+        self.lbl_heartbeat.setText("Status: Engine Started...")
 
-        # Get Parametric Filtering options
         filtering_options = self.get_parametric_options()
 
-        # Start official Worker thread
         self.worker = ScanEngine(selected_paths, depth, save_path, filtering_options)
-        self.worker.progress_signal.connect(self.progress_bar.setValue)
+        self.worker.heartbeat_signal.connect(self.update_heartbeat) # Connect heartbeat
         self.worker.log_signal.connect(self.txt_log.append)
         self.worker.finished_signal.connect(self.analysis_finished)
         self.worker.start()
 
     def analysis_finished(self, data):
-        """Thaws UI and notifies successful completion."""
         self.btn_analyze.setEnabled(True)
+        self.btn_analyze.setText("Drill Down (Start Scan Engine)")
+        self.btn_analyze.setStyleSheet("") 
+        
         self.grp_options.setEnabled(True)
         self.cmb_format.setEnabled(True)
         self.spin_depth.setEnabled(True)
         self.txt_output_name.setEnabled(True)
+        
+        # Stop indeterminate mode
+        self.progress_bar.setRange(0, 100) 
+        self.progress_bar.setValue(100)
         self.progress_bar.setVisible(False)
-        QMessageBox.information(self, "Scan Complete", f"High-performance extraction complete. Official report saved as '{os.path.basename(self.worker.save_path)}'.")
+        
+        self.lbl_heartbeat.setText("Status: Idle")
+        
+        if hasattr(self.worker, '_is_cancelled') and self.worker._is_cancelled:
+            QMessageBox.warning(self, "Scan Aborted", f"The operation was safely aborted by the user.\nPartial data has been saved to: {os.path.basename(self.worker.save_path)}")
+        elif "error" in data:
+            QMessageBox.critical(self, "Export Error", f"An error occurred during export:\n{data['error']}")
+        else:
+            QMessageBox.information(self, "Scan Complete", f"High-performance extraction complete. Official report saved as '{os.path.basename(self.worker.save_path)}'.")
 
     def open_output_folder(self):
-        """Officially opens the current execution context folder."""
         output_folder = os.getcwd()
         if sys.platform == "win32":
             os.startfile(output_folder)
@@ -515,13 +552,9 @@ class PathDrillApp(QMainWindow):
             os.system(f"xdg-open '{output_folder}'")
 
 if __name__ == "__main__":
-    # High DPI dynamic scaling
     os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
-    
     app = QApplication(sys.argv)
-    app.setStyle("Fusion") # Official professional style
-
+    app.setStyle("Fusion") 
     analyzer = PathDrillApp()
     analyzer.show()
-    
     sys.exit(app.exec())
