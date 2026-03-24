@@ -1,12 +1,11 @@
 # PathDrill
 
-**⚠️ This project was developed as an experimental and rapid prototyping effort, focusing on performance and usability.**
+> ⚠️ This project was developed as an experimental and rapid prototyping effort, focusing on performance and usability.
 
 **A fast and efficient file path extraction and hierarchy mapping tool for Windows.**
-
 Built with Python and PySide6.
 
-PathDrill is designed to explore and analyze complex directory structures with ease. It allows you to scan folders deeply, extract useful metadata (such as file size, modification date, and extensions), and export everything into a clean, structured JSON format.
+PathDrill is designed to explore and analyze complex directory structures with ease. It allows you to scan folders deeply, extract useful metadata (such as file size, modification date, and extensions), and export everything into various structured formats.
 
 Under the hood, it uses `os.scandir` for high-performance traversal, making it capable of handling thousands of nested directories without significant memory overhead.
 
@@ -23,92 +22,78 @@ Under the hood, it uses `os.scandir` for high-performance traversal, making it c
 * **Adjustable Scan Depth**
   Control how deep the scan goes to avoid unnecessary processing.
 
-* **Structured JSON Export**
-  Export the full directory tree with:
+* **Multi-Format Export Strategy**
+  Export your filesystem topology in multiple formats depending on your needs:
 
+  * **JSON (Default):** Complete, lossless hierarchical data structure
+  * **CSV:** Flattened 2D matrix ideal for Pandas, Excel, and SQL ingestion
+  * **TXT:** Visual ASCII tree representation (similar to the terminal `tree` command)
+  * **MD:** Markdown-formatted lists with folder/file icons for easy reading on GitHub or Notion
+
+* **Parametric Metadata Extraction**
+  Dynamically choose to include:
+
+  * OS-native absolute paths
   * ISO 8601 formatted timestamps
-  * Human-readable file sizes
-  * Raw byte data for precision
+  * Human-readable file sizes and raw byte precision
+  * File extensions
 
 ---
 
 ## 📸 Screenshot
 
-
-![PathDrill Screenshot](assets/screenshot.jpg)
+![PathDrill Screenshot](assets/screenshot.png)
 
 ---
 
-## 🧪 Example Output
+## 🧪 Example Outputs
+
+### JSON Format (Data Structure)
 
 ```json
 {
-    "report_info": {
-        "tool": "PathDrill-Extractor",
-        "creation_datetime": "2026-03-24T22:54:04.782642",
-        "scanned_paths_count": 1,
-        "defined_depth": "Unlimited",
-        "metadata_filtering": {
-            "include_path": true,
-            "include_date": true,
-            "include_bytes": true,
-            "include_readable": true,
-            "include_extension": true
-        },
-        "status": "Completed Successfully"
-    },
     "scan_results": [
         {
-            "name": "X",
-            "full_path": "C:/X",
-            "last_modified": "2026-03-24T22:07:33.654003",
-            "size_bytes": 0,
-            "size_readable": "0 B",
+            "name": "src",
+            "full_path": "C:\\Project\\src",
             "type": "directory",
             "contents": [
                 {
-                    "name": "Y1",
-                    "full_path": "C:/X/Y1",
-                    "last_modified": "2026-03-24T22:08:15.178289",
-                    "size_bytes": 0,
-                    "size_readable": "0 B",
-                    "type": "directory",
-                    "contents": [
-                        {
-                            "name": "aAA.txt",
-                            "full_path": "C:/X/Y1/aAA.txt",
-                            "last_modified": "2026-03-24T22:08:11.743058",
-                            "size_bytes": 0,
-                            "size_readable": "0 B",
-                            "type": "file",
-                            "extension": ".txt"
-                        }
-                    ]
-                },
-                {
-                    "name": "Y2",
-                    "full_path": "C:/X/Y2",
-                    "last_modified": "2026-03-24T22:08:04.905914",
-                    "size_bytes": 0,
-                    "size_readable": "0 B",
-                    "type": "directory",
-                    "contents": [
-                        {
-                            "name": "zZZ.txt",
-                            "full_path": "C:/X/Y2/zZZ.txt",
-                            "last_modified": "2026-03-24T22:07:55.695189",
-                            "size_bytes": 0,
-                            "size_readable": "0 B",
-                            "type": "file",
-                            "extension": ".txt"
-                        }
-                    ]
+                    "name": "main.py",
+                    "full_path": "C:\\Project\\src\\main.py",
+                    "size_readable": "2.50 KB",
+                    "type": "file"
                 }
             ]
         }
     ]
 }
 ```
+
+### TXT Format (Visual Tree)
+
+```txt
+├── src (0 B)
+│   └── main.py (2.50 KB)
+├── assets (0 B)
+│   └── logo.png (150.00 KB)
+└── README.md (1.20 KB)
+```
+
+### Markdown (MD) Format
+
+```md
+📁 src
+
+📄 main.py (2.50 KB)
+
+📁 assets
+
+📄 logo.png (150.00 KB)
+
+📄 README.md (1.20 KB)
+```
+
 ---
 
 ## 🚀 Getting Started
