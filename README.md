@@ -1,113 +1,68 @@
-# PathDrill
+<p align="center">
+  <img src="logo.png" alt="PathDrill Logo" width="150"/>
+</p>
 
-> ⚠️ This project was developed as an experimental and rapid prototyping effort, focusing on performance and usability.
+<h1 align="center">PathDrill</h1>
 
-**A fast and efficient file path extraction and hierarchy mapping tool for Windows.**
-Built with Python and PySide6.
+<p align="center">
+  <em>A high-performance Python desktop utility for fast, focused directory scanning and structured data extraction.</em>
+</p>
 
-PathDrill is designed to explore and analyze complex directory structures with ease. It allows you to scan folders deeply, extract useful metadata (such as file size, modification date, and extensions), and export everything into various structured formats.
+<p align="center">
+  <em>Yüksek performanslı, hızlı ve odaklı dizin tarama ve yapılandırılmış veri çıkarımı için Python masaüstü aracı.</em>
+</p>
 
-Under the hood, it uses `os.scandir` for high-performance traversal, making it capable of handling thousands of nested directories without significant memory overhead.
-
----
-
-## ✨ Features
-
-* **Built-in File Explorer**
-  Navigate your filesystem through a fast and responsive interface with full access to local drives.
-
-* **Deep Directory Scanning**
-  Efficient multi-threading ensures smooth performance, even when working with large and deeply nested folders.
-
-* **Adjustable Scan Depth**
-  Control how deep the scan goes to avoid unnecessary processing.
-
-* **Multi-Format Export Strategy**
-  Export your filesystem topology in multiple formats depending on your needs:
-
-  * **JSON (Default):** Complete, lossless hierarchical data structure
-  * **CSV:** Flattened 2D matrix ideal for Pandas, Excel, and SQL ingestion
-  * **TXT:** Visual ASCII tree representation (similar to the terminal `tree` command)
-  * **MD:** Markdown-formatted lists with folder/file icons for easy reading on GitHub or Notion
-
-* **Parametric Metadata Extraction**
-  Dynamically choose to include:
-
-  * OS-native absolute paths
-  * ISO 8601 formatted timestamps
-  * Human-readable file sizes and raw byte precision
-  * File extensions
+<p align="center">
+  <a href="#-about-the-project">🇬🇧 English</a> •
+  <a href="#-proje-hakkında">🇹🇷 Türkçe</a>
+</p>
 
 ---
 
-## 📸 Screenshot
+## 📌 About The Project
 
-![PathDrill Screenshot](assets/screenshot1.jpg)
+PathDrill was born out of a practical necessity: the need to quickly parse through massive directories, identify specific file patterns, and extract structural data without dealing with sluggish, resource-heavy tools.
 
-![PathDrill Gif](assets/x.gif)
-
----
-
-## 🧪 Example Outputs
-
-### JSON Format (Data Structure)
-
-```json
-{
-    "scan_results": [
-        {
-            "name": "src",
-            "full_path": "C:\\Project\\src",
-            "type": "directory",
-            "contents": [
-                {
-                    "name": "main.py",
-                    "full_path": "C:\\Project\\src\\main.py",
-                    "size_readable": "2.50 KB",
-                    "type": "file"
-                }
-            ]
-        }
-    ]
-}
-```
-
-### TXT Format (Visual Tree)
-
-```txt
-├── src (0 B)
-│   └── main.py (2.50 KB)
-├── assets (0 B)
-│   └── logo.png (150.00 KB)
-└── README.md (1.20 KB)
-```
-
-### Markdown (MD) Format
-
-```md
-📁 src
-
-📄 main.py (2.50 KB)
-
-📁 assets
-
-📄 logo.png (150.00 KB)
-
-📄 README.md (1.20 KB)
-```
+Unlike standard command-line utilities or overly complex commercial software, PathDrill provides a clean GUI with an underlying multithreaded architecture. It is designed to get in, drill down to the required depth, extract the necessary paths or file metrics, and get out—saving significant time in daily development and data management workflows.
 
 ---
 
-## 🚀 Getting Started
+## 📸 Preview
+
+Here is a glimpse of the user interface and the scanning engine in action:
+
+<p align="center">
+  <img src="assets/x.gif" alt="PathDrill Action GIF" width="600"/>
+</p>
+
+---
+
+## ✨ Core Features
+
+* **Interactive GUI (PySide6):** A clean, intuitive graphical interface featuring a live directory tree and responsive configuration panels.
+
+* **Multithreaded Scan Engine:** Deep directory traversals run on a separate background thread, ensuring the UI remains responsive and memory consumption stays low.
+
+* **Granular Depth Control:** Customize the exact recursion depth (spin_depth) to prevent unnecessary scanning of deeply nested, irrelevant subfolders.
+
+* **Structured Data Export:** Easily export the extracted drill data into various structured formats (CSV, JSON, etc.) for further analysis.
+
+---
+
+## 🚀 Installation & Usage
+
+PathDrill is built with Python. To run it locally, follow these steps:
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Bedirhan-thinking/PathDrill.git
+git clone https://github.com/[YOUR_USERNAME]/PathDrill.git
 cd PathDrill
 ```
 
-### 2. Install dependencies
+### 2. Install the dependencies
+
+It is highly recommended to use a virtual environment.
 
 ```bash
 pip install -r requirements.txt
@@ -121,20 +76,89 @@ python PathDrill.py
 
 ---
 
-## 📦 Building a Standalone Executable
+## 🤝 Contributing
 
-You can package PathDrill into a single `.exe` file using PyInstaller:
+PathDrill is open to any contributions that aim to optimize the codebase, improve the scanning algorithm, or extend export capabilities.
 
-```bash
-pip install pyinstaller
-pyinstaller --noconsole --onefile --icon=icon.ico PathDrill.py
-```
+If you spot a bug or have a feature request, feel free to open an Issue.
 
-The compiled executable will be available in the `dist` directory.
+If you want to contribute directly to the code, please fork the repository and submit a Pull Request (PR).
 
 ---
 
-## 🤝 Contributing
+## 📄 License
 
-Contributions, ideas, and feedback are always welcome.
-Feel free to open an issue or submit a pull request.
+This project is licensed under the MIT License. You are free to inspect, modify, and integrate the code into your own projects. See the license file in the repository for more details.
+
+---
+
+# 🇹🇷 Proje Hakkında
+
+PathDrill, pratik bir ihtiyaçtan doğmuştur: büyük dizinleri hızlıca analiz etmek, belirli dosya desenlerini tespit etmek ve ağır, kaynak tüketen araçlara ihtiyaç duymadan yapısal verileri çıkarmak.
+
+Standart komut satırı araçlarının veya karmaşık ticari yazılımların aksine, PathDrill temiz bir GUI ve çok iş parçacıklı (multithreaded) bir mimari sunar. Amaç; hızlıca içeri girip, gerekli derinliğe inmek, gerekli veriyi çıkarmak ve çıkmaktır — böylece günlük geliştirme ve veri yönetimi süreçlerinde ciddi zaman tasarrufu sağlar.
+
+---
+
+## 📸 Önizleme
+
+Arayüzün ve tarama motorunun çalışmasına kısa bir bakış:
+
+<p align="center">
+  <img src="assets/x.gif" alt="PathDrill Action GIF" width="600"/>
+</p>
+
+---
+
+## ✨ Temel Özellikler
+
+* **Etkileşimli Arayüz (PySide6):** Canlı dizin ağacı ve hızlı tepki veren ayar panelleri içeren sade ve anlaşılır bir GUI.
+
+* **Çok İş Parçacıklı Tarama Motoru:** Derin dizin taramaları arka planda çalışır, böylece arayüz donmaz ve bellek kullanımı düşük kalır.
+
+* **Hassas Derinlik Kontrolü:** Gereksiz alt klasör taramalarını önlemek için tarama derinliğini (spin_depth) ayarlayabilirsiniz.
+
+* **Yapılandırılmış Veri Dışa Aktarımı:** Elde edilen verileri CSV, JSON gibi formatlarda kolayca dışa aktarabilirsiniz.
+
+---
+
+## 🚀 Kurulum ve Kullanım
+
+PathDrill Python ile geliştirilmiştir. Yerel olarak çalıştırmak için:
+
+### 1. Depoyu klonlayın
+
+```bash
+git clone https://github.com/[YOUR_USERNAME]/PathDrill.git
+cd PathDrill
+```
+
+### 2. Bağımlılıkları yükleyin
+
+Sanal ortam kullanmanız önerilir.
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Uygulamayı çalıştırın
+
+```bash
+python PathDrill.py
+```
+
+---
+
+## 🤝 Katkıda Bulunma
+
+Kod tabanını optimize etmek, tarama algoritmasını geliştirmek veya dışa aktarma yeteneklerini artırmak isteyen tüm katkılara açıktır.
+
+Bir hata bulursanız veya özellik öneriniz varsa Issue açabilirsiniz.
+
+Doğrudan katkı sağlamak için repo'yu fork edip Pull Request (PR) gönderebilirsiniz.
+
+---
+
+## 📄 Lisans
+
+Bu proje MIT Lisansı ile lisanslanmıştır. Kodu inceleyebilir, değiştirebilir ve kendi projelerinize entegre edebilirsiniz. Detaylar için lisans dosyasına bakınız.
