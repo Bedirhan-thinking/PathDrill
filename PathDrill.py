@@ -172,32 +172,79 @@ class ScanEngine(QThread):
             writer.writerows(rows)
 
     def export_to_txt(self, data, file_path):
+        """
+        Exports the scanned directory tree to a plain text file.
+        Dynamically appends all available metadata to each node based on user selection.
+        """
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(f"PathDrill Report - Generated at {data['report_info']['creation_datetime']}\n")
-            f.write("=" * 60 + "\n\n")
+            f.write("=" * 100 + "\n\n")
+            
             def write_tree(nodes, prefix=""):
                 for i, node in enumerate(nodes):
                     is_last = (i == len(nodes) - 1)
                     connector = "└── " if is_last else "├── "
-                    size_info = f" ({node.get('size_readable', '')})" if 'size_readable' in node else ""
-                    f.write(f"{prefix}{connector}{node.get('name', '')}{size_info}\n")
+                    
+                    # Aggregate selected metadata into a formatted string
+                    meta_elements = []
+                    if "size_readable" in node:
+                        meta_elements.append(f"Size: {node['size_readable']}")
+                    if "size_bytes" in node:
+                        meta_elements.append(f"Raw: {node['size_bytes']}B")
+                    if "last_modified" in node:
+                        meta_elements.append(f"Mod: {node['last_modified']}")
+                    if "full_path" in node:
+                        meta_elements.append(f"Path: {node['full_path']}")
+                    if "extension" in node:
+                        meta_elements.append(f"Ext: {node['extension']}")
+                    
+                    # Format the metadata block only if elements exist
+                    meta_str = f"  [{' | '.join(meta_elements)}]" if meta_elements else ""
+                    
+                    f.write(f"{prefix}{connector}{node.get('name', '')}{meta_str}\n")
+                    
                     if "contents" in node:
                         extension = "    " if is_last else "│   "
                         write_tree(node["contents"], prefix + extension)
+                        
             write_tree(data["scan_results"])
 
     def export_to_md(self, data, file_path):
+        """
+        Exports the scanned directory tree to a Markdown file.
+        Utilizes markdown-specific formatting (bolding, inline code blocks) 
+        for optimal readability of the extracted metadata.
+        """
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(f"# PathDrill Extraction Report\n")
             f.write(f"**Generated:** `{data['report_info']['creation_datetime']}`\n\n")
+            
             def write_md(nodes, depth=0):
                 indent = "  " * depth
                 for node in nodes:
                     icon = "📁" if node.get("type") == "directory" else "📄"
                     name = f"**{node.get('name', '')}**" if node.get("type") == "directory" else node.get('name', '')
-                    size_info = f" *({node.get('size_readable', '')})*" if 'size_readable' in node else ""
-                    f.write(f"{indent}- {icon} {name}{size_info}\n")
-                    if "contents" in node: write_md(node["contents"], depth + 1)
+                    
+                    # Aggregate selected metadata with Markdown styling
+                    meta_elements = []
+                    if "size_readable" in node:
+                        meta_elements.append(f"*{node['size_readable']}*")
+                    if "size_bytes" in node:
+                        meta_elements.append(f"`{node['size_bytes']} B`")
+                    if "last_modified" in node:
+                        meta_elements.append(f"`{node['last_modified']}`")
+                    if "full_path" in node:
+                        meta_elements.append(f"Path: `{node['full_path']}`")
+                    if "extension" in node:
+                        meta_elements.append(f"Ext: `{node['extension']}`")
+                    
+                    meta_str = f" - ({' | '.join(meta_elements)})" if meta_elements else ""
+                    
+                    f.write(f"{indent}- {icon} {name}{meta_str}\n")
+                    
+                    if "contents" in node: 
+                        write_md(node["contents"], depth + 1)
+                        
             write_md(data["scan_results"])
 
     def run(self):
@@ -206,9 +253,9 @@ class ScanEngine(QThread):
         
         self.log_signal.emit(f"### PathDrill OFFICIAL Scan Started: {start_time.strftime('%H:%M:%S')} ###")
         
-        # ==========================================
+
         # PHASE 1: PRE-FLIGHT TOPOLOGY INDEXING
-        # ==========================================
+
         self.phase_signal.emit("INDETERMINATE") # Tell UI to show spinner
         self.log_signal.emit("Phase 1: Initiating High-Speed Topological Indexing...")
         
@@ -224,9 +271,9 @@ class ScanEngine(QThread):
 
         self.log_signal.emit(f"Phase 1 Complete. Target structural size: {self.total_expected_nodes:,} nodes.")
         
-        # ==========================================
+
         # PHASE 2: METADATA EXTRACTION (DFS)
-        # ==========================================
+
         self.phase_signal.emit("DETERMINATE") # Tell UI to activate 0-100 progress bar
         self.log_signal.emit("Phase 2: Extracting deep metadata structures...")
 
