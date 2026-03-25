@@ -56,7 +56,7 @@ PathDrill is built with Python. To run it locally, follow these steps:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/[YOUR_USERNAME]/PathDrill.git
+git clone https://github.com/Bedirhan-thinking/PathDrill.git
 cd PathDrill
 ```
 
@@ -129,7 +129,7 @@ PathDrill Python ile geliştirilmiştir. Yerel olarak çalıştırmak için:
 ### 1. Depoyu klonlayın
 
 ```bash
-git clone https://github.com/[YOUR_USERNAME]/PathDrill.git
+git clone https://github.com/Bedirhan-thinking/PathDrill.git
 cd PathDrill
 ```
 
