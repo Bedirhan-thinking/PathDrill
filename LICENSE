@@ -1,21 +1,29 @@
-MIT License
+PathDrill Non-Commercial License
 
 Copyright (c) 2026 Bedirhan-thinking
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software and associated documentation files (the "Software") are made available under the following terms and conditions. By using, copying, or modifying the Software, you agree to these terms.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+PERMITTED USE
+You are granted a free, non-exclusive license to use, copy, modify, and distribute the Software strictly for personal, educational, academic, or non-commercial purposes.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+ATTRIBUTION (MANDATORY)
+Any distribution, modification, or public display of the Software, whether in its original or modified form, must clearly include attribution to the original author. This includes retaining the above copyright notice, this list of conditions, and a visible link to the original GitHub repository.
+
+COMMERCIAL USE (PROHIBITED WITHOUT PERMISSION)
+You may NOT use the Software, or any modifications or derivative works thereof, for any commercial purposes without explicit, prior written permission from the copyright holder.
+"Commercial purposes" includes, but is not limited to:
+
+Selling the Software or incorporating it into a commercial product.
+
+Using the Software to provide a commercial service or SaaS.
+
+Using the Software internally within a commercial entity to generate revenue or process commercial data.
+
+For commercial licensing inquiries, please contact the author directly.
+
+CONTRIBUTIONS
+Unless explicitly stated otherwise, any intentional contributions or modifications submitted to this repository will fall under the terms of this license, maintaining the non-commercial nature of the collective work.
+
+DISCLAIMER OF WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

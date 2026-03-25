@@ -2,7 +2,7 @@
 
 First of all, thank you for taking the time to contribute\! 🎉
 
-PathDrill is an open-source tool, and it grows best with community input. Whether you're fixing a typo, improving the scanning algorithm, or suggesting a completely new feature, your help is genuinely appreciated.
+PathDrill is a **source-available** project. It grows best with community input, while maintaining a strict non-commercial philosophy to protect the core work. Whether you're fixing a typo, improving the scanning algorithm, or suggesting a completely new feature, your help is genuinely appreciated.
 
 ## **How Can I Contribute?**
 
@@ -29,6 +29,10 @@ If you want to dive into the code yourself:
 4. Commit your changes (git commit \-m 'Add some amazing feature').  
 5. Push to the branch (git push origin feature/amazing-feature).  
 6. Open a **Pull Request (PR)** here.
+
+## **Licensing of Contributions**
+
+By contributing to PathDrill, you agree that your contributions will be licensed under the project's existing **PathDrill Non-Commercial License**. This ensures that the project remains free for personal and academic use, while commercial exploitation remains restricted.
 
 ## **Philosophy**
 

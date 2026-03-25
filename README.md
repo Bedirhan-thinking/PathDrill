@@ -88,7 +88,7 @@ If you want to contribute directly to the code, please fork the repository and s
 
 ## 📄 License
 
-This project is licensed under the MIT License. You are free to inspect, modify, and integrate the code into your own projects. See the license file in the repository for more details.
+This project is released under a Custom Non-Commercial License. You are free to inspect, modify, and use the code for personal, academic, or non-commercial purposes as long as you provide proper attribution. For commercial use, explicit permission from the author is required. See the LICENSE file for full details.
 
 ---
 
@@ -161,4 +161,4 @@ Doğrudan katkı sağlamak için repo'yu fork edip Pull Request (PR) gönderebil
 
 ## 📄 Lisans
 
-Bu proje MIT Lisansı ile lisanslanmıştır. Kodu inceleyebilir, değiştirebilir ve kendi projelerinize entegre edebilirsiniz. Detaylar için lisans dosyasına bakınız.
+Bu proje, Ticari Olmayan Özel Lisans kapsamında yayınlanmaktadır. Uygun şekilde kaynak göstermeniz koşuluyla, kodu kişisel, akademik veya ticari olmayan amaçlarla incelemekte, değiştirmekte ve kullanmakta özgürsünüz. Ticari kullanım için yazarın açık izni gereklidir. Ayrıntılı bilgi için LICENSE dosyasına bakınız.
